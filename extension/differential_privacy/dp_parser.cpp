@@ -64,7 +64,7 @@ namespace duckdb {
 
     ParserExtensionPlanResult DPParserExtension::DPPlanFunction(ParserExtensionInfo *info, ClientContext &context,
                                                                 unique_ptr<ParserExtensionParseData> parse_data) {
-        printf("peter\n");
+        printf("test\n");
         return ParserExtensionPlanResult();
 //        return result;
     }
