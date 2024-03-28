@@ -34,23 +34,22 @@ namespace duckdb {
         }
     };
 
-    struct DPParseData : ParserExtensionParseData {
-        DPParseData() {
+    struct DPParseData : public ParserExtensionParseData {
+        DPParseData(string view_query, string meta_query) : view_query(view_query), meta_query(meta_query) {
         }
 
-        unique_ptr<SQLStatement> statement;
+        string view_query;
+        string meta_query;
 
-        unique_ptr<ParserExtensionParseData> Copy() const override {
-            return make_uniq_base<ParserExtensionParseData, DPParseData>(statement->Copy());
-        }
-
-        explicit DPParseData(unique_ptr<SQLStatement> statement) : statement(std::move(statement)) {
+        duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
+            return make_uniq<DPParseData>(view_query, meta_query);
         }
     };
 
-    class IVMState : public ClientContextState {
+
+    class DPState : public ClientContextState {
     public:
-        explicit IVMState(unique_ptr<ParserExtensionParseData> parse_data) : parse_data(std::move(parse_data)) {
+        explicit DPState(unique_ptr<ParserExtensionParseData> parse_data) : parse_data(std::move(parse_data)) {
         }
 
         void QueryEnd() override {
@@ -89,12 +88,9 @@ namespace duckdb {
                                                         vector<LogicalType> &return_types, vector<string> &names) {
 
 
-            names.emplace_back("MATERIALIZED VIEW CREATION");
+            names.emplace_back("DP");
             return_types.emplace_back(LogicalType::BOOLEAN);
-            bool result = false;
-            if (IntegerValue::Get(input.inputs[0]) == 1) {
-                result = true; // explict creation of the result since the input is an integer value for some reason
-            }
+            bool result = true;
             return make_uniq<DPBindData>(result);
         }
 
@@ -104,11 +100,11 @@ namespace duckdb {
 
         static void DPFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
             // placeholder (this needs to return something)
-             printf("Inside IVMFunc of Table function class\n");
+             printf("Inside DPFunc of Table function class\n");
 
         }
     };
 
 } // namespace duckdb
 
-#endif // DUCKDB_IVM_PARSER_HPP
+#endif // DUCKDB_DP_PARSER_HPP

@@ -12,7 +12,7 @@
 
 
 namespace duckdb {
-
+    // TODO remove (kept for some debugging)
     inline void DifferentialPrivacyScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
         auto &name_vector = args.data[0];
         UnaryExecutor::Execute<string_t, string_t>(
@@ -22,9 +22,9 @@ namespace duckdb {
                 });
     }
 
-
-
     static void LoadInternal(DatabaseInstance &instance) {
+
+        // TODO remove (kept for some debugging)
         // Register a scalar function
         auto differential_privacy_scalar_function = ScalarFunction("quack", {LogicalType::VARCHAR}, LogicalType::VARCHAR, DifferentialPrivacyScalarFun);
         ExtensionUtil::RegisterFunction(instance, differential_privacy_scalar_function);
