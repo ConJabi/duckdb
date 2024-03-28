@@ -10,7 +10,6 @@
 namespace duckdb {
     ParserExtensionParseResult DPParserExtension::DPParseFunction(ParserExtensionInfo *info, const string &query) {
 
-//        auto query_lower = StringUtil::Lower(StringUtil::Replace(query, "\n", " "));
         auto query_lower = StringUtil::Replace(query, "\n", " ");
 
         StringUtil::Trim(query_lower);
