@@ -11,6 +11,7 @@
 #include "dp_parser.hpp"
 #include "opendp.h"
 
+
 template<typename T>
 T handleFfiResult(const FfiResult<T> &result) {
 	if (result.tag == FfiResult<T>::Tag::Ok) {
@@ -21,77 +22,82 @@ T handleFfiResult(const FfiResult<T> &result) {
 }
 
 
-extern  "C"{
-double printMessage(double number, char *type, float bounds[2]) {
+
+double make_gaussian(double number, double scale, char *type) {
 	char *MO = "ZeroConcentratedDivergence<f64>";
 	char *c_T = type;
 	bool c_nullable = false;
-	AnyDomain *domain;
 
-	if (bounds == NULL) {
-		domain = handleFfiResult(opendp_domains__atom_domain(NULL, c_nullable, c_T));
-	} else {
-		char *bound_type = "(f64, f64)";
-		float bounds2[2] = {1.0, 2.0};
-		float *prr = bounds2;
-		const FfiSlice bounds_slice = {prr, 2};
-		AnyObject *bounds_object = handleFfiResult(opendp_data__slice_as_object(&bounds_slice, bound_type));
+	AnyDomain *atom_domain = handleFfiResult(opendp_domains__atom_domain(NULL, c_nullable, c_T));
+	AnyMetric *metric = handleFfiResult(opendp_metrics__absolute_distance(type));
+	AnyMeasurement *measurement = handleFfiResult(
+	    opendp_measurements__make_gaussian(atom_domain, metric, &scale, NULL, MO));
 
-		domain = handleFfiResult(opendp_domains__atom_domain(bounds_object, c_nullable, c_T));
+
+	const FfiSlice number_slice = {&number, 1};
+
+	AnyObject *number_anyobject = handleFfiResult(opendp_data__slice_as_object(&number_slice, type));
+	const AnyObject *private_anyobject = handleFfiResult(opendp_core__measurement_invoke(measurement, number_anyobject));
+
+	const void *private_number_ptr = handleFfiResult(opendp_data__object_as_slice(private_anyobject))->ptr;
+	return *(const double *) private_number_ptr;
+}
+
+template<typename T>
+void make_gaussian_vec(T *number, T scale, char *type, uint32_t size, T *result) {
+	AnyMeasure *measure = handleFfiResult(opendp_measures__zero_concentrated_divergence(type));
+	char *measure_type = handleFfiResult(opendp_measures__measure_type(measure));
+
+	AnyDomain *atom_domain = handleFfiResult(opendp_domains__atom_domain(NULL, false, type));
+	const FfiSlice size_slice = {&size, 1};
+	const AnyObject *size_anyobject = handleFfiResult(opendp_data__slice_as_object(&size_slice, "i32"));
+	AnyDomain *vector_domain = handleFfiResult(opendp_domains__vector_domain(atom_domain, size_anyobject));
+
+	AnyMetric *metric = handleFfiResult(opendp_metrics__l2_distance(type));
+
+	AnyMeasurement *measurement = handleFfiResult(
+	    opendp_measurements__make_gaussian(vector_domain, metric, &scale, NULL, measure_type));
+
+
+	const FfiSlice number_slice = {number, size};
+	std::string cpp_vec_type = std::string("Vec<") + std::string(type) + std::string(">");
+	const char* c_vec_type = cpp_vec_type.c_str();
+	AnyObject *number_anyobject = handleFfiResult(opendp_data__slice_as_object(&number_slice, c_vec_type));
+
+	AnyObject *private_anyobject = handleFfiResult(opendp_core__measurement_invoke(measurement, number_anyobject));
+	const FfiSlice *private_void_ptr = handleFfiResult(opendp_data__object_as_slice(private_anyobject));
+
+	T *private_number_ptr = (T *) private_void_ptr->ptr;
+
+	for (size_t i = 0; i < size; i++) {
+		result[i] = private_number_ptr[i];
 	}
 
-
-	AnyMetric *metric = handleFfiResult(opendp_metrics__absolute_distance(type));
-	double scale = 1;
-
-	AnyMeasurement *anymeasurement = handleFfiResult(
-	    opendp_measurements__make_gaussian(domain, metric, &scale, NULL, MO));
-
-
-	const FfiSlice slice = {&number, 1};
-
-	AnyObject *a = handleFfiResult(opendp_data__slice_as_object(&slice, type));
-	const AnyObject *ab = handleFfiResult(opendp_core__measurement_invoke(anymeasurement, a));
-
-	const void *aaa = handleFfiResult(opendp_data__object_as_slice(ab))->ptr;
-	double number1 = *(const double *) aaa;
-
-
-	return number1;
-
 }
-}
+
 
 namespace duckdb {
-    // TODO remove (kept for some debugging)
-    inline void DifferentialPrivacyScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-        auto &name_vector = args.data[0];
-        UnaryExecutor::Execute<string_t, string_t>(
-                name_vector, result, args.size(),
-                [&](string_t name) {
-                    return StringVector::AddString(result, "Quack "+name.GetString());;
-                });
-    }
-
-
 
     double test (double test){
-	    return printMessage(test,"f64", NULL);
+	    return make_gaussian(test,0.05, "f64");
     }
-    static void MyCustomFunction(DataChunk  &args, ExpressionState &state, Vector &result) {
+
+    static void NoiseFunction(DataChunk  &args, ExpressionState &state, Vector &result) {
 	    auto &name_vector = args.data[0];
-	   UnaryExecutor::Execute<double, double>(name_vector, result, args.size(),  test);
+
+	    auto result_data = FlatVector::GetData<double>(result);
+	    auto input_data = FlatVector::GetData<double>(name_vector);
+	    make_gaussian_vec<double>(input_data, 0.05, "f64", args.size(), result_data);
+
+//	    UnaryExecutor::Execute<double, double>(name_vector, result, args.size(),  test);
     }
+
 
 
     static void LoadInternal(DatabaseInstance &instance) {
-
-        // TODO remove (kept for some debugging)
         // Register a scalar function
-        auto differential_privacy_scalar_function = ScalarFunction("quack", {LogicalType::VARCHAR}, LogicalType::VARCHAR, DifferentialPrivacyScalarFun);
-	    auto differential_privacy_scalar_function2 = ScalarFunction("quack2", {LogicalType::DOUBLE}, LogicalType::DOUBLE, MyCustomFunction);
-        ExtensionUtil::RegisterFunction(instance, differential_privacy_scalar_function);
-	    ExtensionUtil::RegisterFunction(instance, differential_privacy_scalar_function2);
+	    auto noise_function = ScalarFunction("noise", {LogicalType::DOUBLE}, LogicalType::DOUBLE, NoiseFunction);
+	    ExtensionUtil::RegisterFunction(instance, noise_function);
 
         // add a parser extension
         auto &db_config = duckdb::DBConfig::GetConfig(instance);

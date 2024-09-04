@@ -14,14 +14,10 @@ include_directories(
         OpenDP
 )
 
-#include_directories("${CMAKE_SOURCE_DIR}/extension/differential_privacy/OpenDP")
-
-
 set(DIFFERENTIAL_PRIVACY_EXTENSION_FILES
         differential_privacy_extension.cpp dp_parser.cpp)
 
-#set(EXTERNAL_LIB_PATH "${CMAKE_SOURCE_DIR}/extension/differential_privacy/OpenDP")  # Set the path to where lib.so is located
-#set(EXTERNAL_LIB "${EXTERNAL_LIB_PATH}/libopendp.so")  # Reference the lib.so file
+
 
 # Link the external library to your project
 link_libraries(${EXTERNAL_LIB})
