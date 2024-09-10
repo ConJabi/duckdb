@@ -98,7 +98,7 @@ namespace duckdb {
             return make_uniq<DPGlobalData>();
         }
 
-        static void DPFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+        static void DPFunc	(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
             // placeholder (this needs to return something)
              printf("Inside DPFunc of Table function class\n");
 

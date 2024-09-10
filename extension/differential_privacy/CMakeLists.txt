@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 set(TARGET_NAME differential_privacy)
 
-set(EXTENSION_NAME ${TARGET_NAME}_extension)
-set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
-
 project(${TARGET_NAME})
 
 set(EXTENSION_NAME ${TARGET_NAME}_extension)
@@ -18,8 +15,6 @@ set(DIFFERENTIAL_PRIVACY_EXTENSION_FILES
         differential_privacy_extension.cpp dp_parser.cpp)
 
 
-
-# Link the external library to your project
 link_libraries(${EXTERNAL_LIB})
 
 

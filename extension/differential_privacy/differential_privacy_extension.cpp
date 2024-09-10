@@ -44,7 +44,18 @@ double make_gaussian(double number, double scale, char *type) {
 }
 
 template<typename T>
-void make_gaussian_vec(T *number, T scale, char *type, uint32_t size, T *result) {
+inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
+	char * type;
+	char * vec_type;
+	if (std::is_same<T, float>::value) {
+		type = "f32";
+		vec_type = "Vec<f32>";
+
+	} else {
+		type = "f64";
+		vec_type = "Vec<f64>";
+	}
+
 	AnyMeasure *measure = handleFfiResult(opendp_measures__zero_concentrated_divergence(type));
 	char *measure_type = handleFfiResult(opendp_measures__measure_type(measure));
 
@@ -60,9 +71,7 @@ void make_gaussian_vec(T *number, T scale, char *type, uint32_t size, T *result)
 
 
 	const FfiSlice number_slice = {number, size};
-	std::string cpp_vec_type = std::string("Vec<") + std::string(type) + std::string(">");
-	const char* c_vec_type = cpp_vec_type.c_str();
-	AnyObject *number_anyobject = handleFfiResult(opendp_data__slice_as_object(&number_slice, c_vec_type));
+	AnyObject *number_anyobject = handleFfiResult(opendp_data__slice_as_object(&number_slice, vec_type));
 
 	AnyObject *private_anyobject = handleFfiResult(opendp_core__measurement_invoke(measurement, number_anyobject));
 	const FfiSlice *private_void_ptr = handleFfiResult(opendp_data__object_as_slice(private_anyobject));
@@ -72,7 +81,6 @@ void make_gaussian_vec(T *number, T scale, char *type, uint32_t size, T *result)
 	for (size_t i = 0; i < size; i++) {
 		result[i] = private_number_ptr[i];
 	}
-
 }
 
 
@@ -82,22 +90,29 @@ namespace duckdb {
 	    return make_gaussian(test,0.05, "f64");
     }
 
+    template<typename T>
     static void NoiseFunction(DataChunk  &args, ExpressionState &state, Vector &result) {
 	    auto &name_vector = args.data[0];
-
-	    auto result_data = FlatVector::GetData<double>(result);
-	    auto input_data = FlatVector::GetData<double>(name_vector);
-	    make_gaussian_vec<double>(input_data, 0.05, "f64", args.size(), result_data);
+	    auto result_data = FlatVector::GetData<T>(result);
+	    auto input_data = FlatVector::GetData<T>(name_vector);
+	    make_gaussian_vec<T>(input_data, 0.05, args.size(), result_data);
 
 //	    UnaryExecutor::Execute<double, double>(name_vector, result, args.size(),  test);
     }
 
+    ScalarFunctionSet GetNoiseFunction() {
+	    ScalarFunctionSet set("noise");
+
+	    set.AddFunction(ScalarFunction( {LogicalType::FLOAT}, LogicalType::FLOAT, NoiseFunction<float>));
+	    set.AddFunction(ScalarFunction( {LogicalType::DOUBLE}, LogicalType::DOUBLE, NoiseFunction<double>));
+	    return set;
+    }
 
 
     static void LoadInternal(DatabaseInstance &instance) {
         // Register a scalar function
-	    auto noise_function = ScalarFunction("noise", {LogicalType::DOUBLE}, LogicalType::DOUBLE, NoiseFunction);
-	    ExtensionUtil::RegisterFunction(instance, noise_function);
+	    ExtensionUtil::RegisterFunction(instance, GetNoiseFunction());
+
 
         // add a parser extension
         auto &db_config = duckdb::DBConfig::GetConfig(instance);
