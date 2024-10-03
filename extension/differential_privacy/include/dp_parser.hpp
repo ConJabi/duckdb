@@ -10,100 +10,101 @@
 
 namespace duckdb {
 
-    class DPParserExtension : public ParserExtension {
-    public:
-        explicit DPParserExtension() {
-            parse_function = DPParseFunction;
-            plan_function = DPPlanFunction;
-        }
+class DPParserExtension : public ParserExtension {
+public:
+	explicit DPParserExtension() {
+		parse_function = DPParseFunction;
+		plan_function = DPPlanFunction;
+	}
 
-        static ParserExtensionParseResult DPParseFunction(ParserExtensionInfo *info, const string &query);
-        static ParserExtensionPlanResult DPPlanFunction(ParserExtensionInfo *info, ClientContext &context,
-                                                         unique_ptr<ParserExtensionParseData> parse_data);
-    };
+	static ParserExtensionParseResult DPParseFunction(ParserExtensionInfo *info, const string &query);
+	static ParserExtensionPlanResult DPPlanFunction(ParserExtensionInfo *info, ClientContext &context,
+	                                                unique_ptr<ParserExtensionParseData> parse_data);
+};
 
-    BoundStatement DPBind(ClientContext &context, Binder &binder, OperatorExtensionInfo *info, SQLStatement &statement);
+BoundStatement DPBind(ClientContext &context, Binder &binder, OperatorExtensionInfo *info, SQLStatement &statement);
 
-    struct DPOperatorExtension : public OperatorExtension {
-        DPOperatorExtension() : OperatorExtension() {
-            Bind = DPBind;
-        }
+struct DPOperatorExtension : public OperatorExtension {
+	DPOperatorExtension() : OperatorExtension() {
+		Bind = DPBind;
+	}
 
-        std::string GetName() override {
-            return "DP";
-        }
-    };
-
-    struct DPParseData : public ParserExtensionParseData {
-        DPParseData(string view_query, string meta_query) : view_query(view_query), meta_query(meta_query) {
-        }
-
-        string view_query;
-        string meta_query;
-
-        duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
-            return make_uniq<DPParseData>(view_query, meta_query);
-        }
-    };
+	std::string GetName() override {
+		return "DP";
+	}
+};
 
 
-    class DPState : public ClientContextState {
-    public:
-        explicit DPState(unique_ptr<ParserExtensionParseData> parse_data) : parse_data(std::move(parse_data)) {
-        }
+struct DPParseData : public ParserExtensionParseData {
+	DPParseData(string view_query, string meta_query) : view_query(view_query), meta_query(meta_query) {
+	}
 
-        void QueryEnd() override {
-            parse_data.reset();
-        }
+	string view_query;
+	string meta_query;
 
-        unique_ptr<ParserExtensionParseData> parse_data;
-    };
-
-    class DPFunction : public TableFunction {
-    public:
-        DPFunction() {
-            name = "DP function";
-            arguments.push_back(LogicalType::BOOLEAN); // parsing successful
-            bind = DPBind;
-            init_global = DPInit;
-            function = DPFunc;
-        }
-
-        struct DPBindData : public TableFunctionData {
-
-            explicit DPBindData(bool result) : result(result) {
-            }
-
-            bool result;
-        };
-
-        struct DPGlobalData : public GlobalTableFunctionState {
-            DPGlobalData() : offset(0) {
-            }
-
-            idx_t offset;
-        };
-
-        static duckdb::unique_ptr<FunctionData> DPBind(ClientContext &context, TableFunctionBindInput &input,
-                                                        vector<LogicalType> &return_types, vector<string> &names) {
+	duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
+		return make_uniq<DPParseData>(view_query, meta_query);
+	}
+};
 
 
-            names.emplace_back("DP");
-            return_types.emplace_back(LogicalType::BOOLEAN);
-            bool result = true;
-            return make_uniq<DPBindData>(result);
-        }
+class DPState : public ClientContextState {
+public:
+	explicit DPState(unique_ptr<ParserExtensionParseData> parse_data) : parse_data(std::move(parse_data)) {
+	}
 
-        static duckdb::unique_ptr<GlobalTableFunctionState> DPInit(ClientContext &context, TableFunctionInitInput &input) {
-            return make_uniq<DPGlobalData>();
-        }
+	void QueryEnd() override {
+		parse_data.reset();
+	}
 
-        static void DPFunc	(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-            // placeholder (this needs to return something)
-             printf("Inside DPFunc of Table function class\n");
+	unique_ptr<ParserExtensionParseData> parse_data;
+};
 
-        }
-    };
+class DPFunction : public TableFunction {
+public:
+	DPFunction() {
+		name = "DP function";
+		arguments.push_back(LogicalType::BOOLEAN); // parsing successful
+		bind = DPBind;
+		init_global = DPInit;
+		function = DPFunc;
+	}
+
+	struct DPBindData : public TableFunctionData {
+
+		explicit DPBindData(bool result) : result(result) {
+		}
+
+		bool result;
+	};
+
+	struct DPGlobalData : public GlobalTableFunctionState {
+		DPGlobalData() : offset(0) {
+		}
+
+		idx_t offset;
+	};
+
+	static duckdb::unique_ptr<FunctionData> DPBind(ClientContext &context, TableFunctionBindInput &input,
+	                                               vector<LogicalType> &return_types, vector<string> &names) {
+
+
+		names.emplace_back("DP");
+		return_types.emplace_back(LogicalType::BOOLEAN);
+		bool result = true;
+		return make_uniq<DPBindData>(result);
+	}
+
+	static duckdb::unique_ptr<GlobalTableFunctionState> DPInit(ClientContext &context, TableFunctionInitInput &input) {
+		return make_uniq<DPGlobalData>();
+	}
+
+	static void DPFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+		// placeholder (this needs to return something)
+		printf("Inside DPFunc of Table function class\n");
+
+	}
+};
 
 } // namespace duckdb
 

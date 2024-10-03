@@ -10,7 +10,8 @@
 #include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
 #include "dp_parser.hpp"
 #include "opendp.h"
-
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 
 template<typename T>
 T handleFfiResult(const FfiResult<T> &result) {
@@ -86,6 +87,12 @@ inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
 
 namespace duckdb {
 
+//	template<typename T>
+//	AggregateFunction DP_sum(const T &test) {
+//
+//	}
+
+
     double test (double test){
 	    return make_gaussian(test,0.05, "f64");
     }
@@ -102,7 +109,6 @@ namespace duckdb {
 
     ScalarFunctionSet GetNoiseFunction() {
 	    ScalarFunctionSet set("noise");
-
 	    set.AddFunction(ScalarFunction( {LogicalType::FLOAT}, LogicalType::FLOAT, NoiseFunction<float>));
 	    set.AddFunction(ScalarFunction( {LogicalType::DOUBLE}, LogicalType::DOUBLE, NoiseFunction<double>));
 	    return set;
