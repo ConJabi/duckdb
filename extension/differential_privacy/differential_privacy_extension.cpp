@@ -87,10 +87,52 @@ inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
 
 namespace duckdb {
 
-//	template<typename T>
-//	AggregateFunction DP_sum(const T &test) {
-//
-//	}
+	template <class T> struct SumState {
+		T sum;
+	};
+
+	struct DPSumOperation {
+	    template <class STATE> static void Initialize(STATE &state) {
+		    state.sum = 0;
+	    }
+
+	    template <class A_TYPE, class STATE, class OP>
+	    static void Operation(STATE &state, const A_TYPE &x_data, AggregateUnaryInput &idata) {
+			    state.sum +=x_data;
+
+	    };
+
+
+	    template <class STATE, class OP>
+	    static void Combine(const STATE &source, STATE &target,
+	                        AggregateInputData &aggr_input_data) {
+
+		 target.sum += source.sum;
+	    };
+
+	    template <class INPUT_TYPE, class STATE, class OP>
+	    static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
+		   state.sum +=input*count;
+	    }
+
+	    template <class T, class STATE>
+	    static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		    target = state.sum;
+	    }
+
+	    static bool IgnoreNull() { return true; }
+
+
+    };
+
+
+    AggregateFunctionSet DP_sum() {
+	    AggregateFunctionSet set("dp_sum");
+	    set.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double,double, DPSumOperation>(LogicalType::DOUBLE,LogicalType::DOUBLE));
+	    return set;
+	};
+
+
 
 
     double test (double test){
@@ -118,6 +160,8 @@ namespace duckdb {
     static void LoadInternal(DatabaseInstance &instance) {
         // Register a scalar function
 	    ExtensionUtil::RegisterFunction(instance, GetNoiseFunction());
+
+	    ExtensionUtil::RegisterFunction(instance, DP_sum());
 
 
         // add a parser extension
