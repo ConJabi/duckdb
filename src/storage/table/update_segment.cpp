@@ -1,12 +1,12 @@
 #include "duckdb/storage/table/update_segment.hpp"
 
+#include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
-
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/common/printer.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -581,7 +581,7 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 		auto idx = sel.get_index(i);
 		auto id = ids[idx];
 		D_ASSERT(idx_t(id) >= vector_offset && idx_t(id) < vector_offset + STANDARD_VECTOR_SIZE);
-		info.tuples[i] = NumericCast<sel_t>(id - vector_offset);
+		info.tuples[i] = NumericCast<sel_t>(NumericCast<idx_t>(id) - vector_offset);
 	};
 }
 
@@ -697,7 +697,7 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 	idx_t count = 0;
 	while (aidx < acount && bidx < bcount) {
 		auto a_index = asel.get_index(aidx);
-		auto a_id = a[a_index] - aoffset;
+		auto a_id = UnsafeNumericCast<idx_t>(a[a_index]) - aoffset;
 		auto b_id = b[bidx];
 		if (a_id == b_id) {
 			merge(a_id, a_index, bidx, count);
@@ -716,7 +716,7 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 	}
 	for (; aidx < acount; aidx++) {
 		auto a_index = asel.get_index(aidx);
-		pick_a(a[a_index] - aoffset, a_index, count);
+		pick_a(UnsafeNumericCast<idx_t>(a[a_index]) - aoffset, a_index, count);
 		count++;
 	}
 	for (; bidx < bcount; bidx++) {
@@ -777,7 +777,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		// we have to merge the info for "ids[i]"
-		auto update_id = ids[idx] - base_id;
+		auto update_id = UnsafeNumericCast<idx_t>(ids[idx]) - base_id;
 
 		while (update_info_offset < update_info->N && update_info->tuples[update_info_offset] < update_id) {
 			// old id comes before the current id: write it
@@ -928,7 +928,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			NumericStats::Update<T>(stats.statistics, update_data[i]);
+			stats.statistics.UpdateNumericStats<T>(update_data[i]);
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -938,7 +938,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		for (idx_t i = 0; i < count; i++) {
 			if (mask.RowIsValid(i)) {
 				sel.set_index(not_null_count++, i);
-				NumericStats::Update<T>(stats.statistics, update_data[i]);
+				stats.statistics.UpdateNumericStats<T>(update_data[i]);
 			}
 		}
 		return not_null_count;
@@ -1062,7 +1062,8 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 
 UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
                                   unsafe_unique_array<char> &data) {
-	data = make_unsafe_uniq_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
+	data = make_unsafe_uniq_array_uninitialized<char>(sizeof(UpdateInfo) +
+	                                                  (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
 	update_info->max = STANDARD_VECTOR_SIZE;
 	update_info->tuples = reinterpret_cast<sel_t *>((data_ptr_cast(update_info)) + sizeof(UpdateInfo));
@@ -1103,7 +1104,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
 	auto first_id = ids[sel.get_index(0)];
-	idx_t vector_index = (first_id - column_data.start) / STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (UnsafeNumericCast<idx_t>(first_id) - column_data.start) / STANDARD_VECTOR_SIZE;
 	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
 
 	D_ASSERT(idx_t(first_id) >= column_data.start);
@@ -1116,7 +1117,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
 		// this transaction in the version chain
 		auto base_info = root->info[vector_index]->info.get();
-		CheckForConflicts(base_info->next, transaction, ids, sel, count, vector_offset, node);
+		CheckForConflicts(base_info->next, transaction, ids, sel, count, UnsafeNumericCast<row_t>(vector_offset), node);
 
 		// there are no conflicts
 		// first, check if this thread has already done any updates
@@ -1163,8 +1164,8 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		auto result = make_uniq<UpdateNodeData>();
 
 		result->info = make_uniq<UpdateInfo>();
-		result->tuples = make_unsafe_uniq_array<sel_t>(STANDARD_VECTOR_SIZE);
-		result->tuple_data = make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * type_size);
+		result->tuples = make_unsafe_uniq_array_uninitialized<sel_t>(STANDARD_VECTOR_SIZE);
+		result->tuple_data = make_unsafe_uniq_array_uninitialized<data_t>(STANDARD_VECTOR_SIZE * type_size);
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;

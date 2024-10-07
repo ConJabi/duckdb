@@ -43,9 +43,9 @@ jobs:
   rstats-windows-extensions:
     # Builds extensions for windows_amd64_rtools
     name: R Package Windows (Extensions)
-    runs-on: windows-latest
+    runs-on: windows-2019
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.git_ref }}
@@ -59,12 +59,6 @@ jobs:
           r-version: 'devel'
           update-rtools: true
           rtools-version: '42' # linker bug in 43 ^^
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - uses: ./.github/actions/build_extensions
         with:
