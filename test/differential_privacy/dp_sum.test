@@ -1,0 +1,22 @@
+# name: test/differential_privacy/dp_sum.test
+# group [differential_privacy]
+
+require differential_privacy
+
+# enable query verification
+statement ok
+CREATE TABLE sum_table (i DOUBLE);
+
+
+# insertion: 1 affected row
+statement ok
+INSERT INTO sum_table VALUES (1);
+
+# insertion: 1 affected row
+statement ok
+INSERT INTO sum_table VALUES (2);
+
+query I
+SELECT dp_sum(i) FROM sum_table;
+----
+3

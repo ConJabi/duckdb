@@ -21,9 +21,11 @@ link_libraries(${EXTERNAL_LIB})
 build_static_extension(differential_privacy ${DIFFERENTIAL_PRIVACY_EXTENSION_FILES})
 build_loadable_extension(differential_privacy " " ${DIFFERENTIAL_PRIVACY_EXTENSION_FILES})
 
-add_library(opendp SHARED IMPORTED)
+add_library(opendp SHARED IMPORTED
+        functions/noise.cpp
+)
 set_target_properties(opendp PROPERTIES
-        IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/extension/differential_privacy/OpenDP/libopendp.so"
+        IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/extension/differential_privacy/OpenDP/libopendp.dylib"
 )
 
 

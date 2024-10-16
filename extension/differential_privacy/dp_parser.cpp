@@ -59,8 +59,8 @@ ParserExtensionParseResult DPParserExtension::DPParseFunction(ParserExtensionInf
 		string meta_query = "INSERT INTO __differential_privacy_metadata VALUES (" + column + "," + threshold + ")"  ;
 
 		// send view and options to planner
-		return ParserExtensionParseResult(
-		    make_uniq<DPParseData>(view_query, meta_query));
+		// return ParserExtensionParseResult(
+		//     make_uniq<DPParseData>(view_query, meta_query));
 
 	}
 

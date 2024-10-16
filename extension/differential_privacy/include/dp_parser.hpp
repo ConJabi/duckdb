@@ -42,9 +42,8 @@ struct DPParseData : public ParserExtensionParseData {
 	string view_query;
 	string meta_query;
 
-	duckdb::unique_ptr<ParserExtensionParseData> Copy() const override {
-		return make_uniq<DPParseData>(view_query, meta_query);
-	}
+	virtual unique_ptr<ParserExtensionParseData> Copy() const = 0;
+	virtual string ToString() const = 0;
 };
 
 
