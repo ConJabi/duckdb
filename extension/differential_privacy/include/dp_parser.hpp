@@ -42,8 +42,13 @@ struct DPParseData : public ParserExtensionParseData {
 	string view_query;
 	string meta_query;
 
-	virtual unique_ptr<ParserExtensionParseData> Copy() const = 0;
-	virtual string ToString() const = 0;
+	unique_ptr<ParserExtensionParseData> Copy() const override {
+		return make_uniq_base<ParserExtensionParseData, DPParseData>(view_query, meta_query);
+
+
+	}
+
+	string ToString() const override { return view_query + " " + meta_query;}
 };
 
 

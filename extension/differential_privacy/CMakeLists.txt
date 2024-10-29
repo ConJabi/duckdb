@@ -1,18 +1,24 @@
 cmake_minimum_required(VERSION 3.5)
+
 set(TARGET_NAME differential_privacy)
 
-project(${TARGET_NAME})
+
 
 set(EXTENSION_NAME ${TARGET_NAME}_extension)
 set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
 
+project(${TARGET_NAME})
 include_directories(
         include
         OpenDP
 )
 
+
+
 set(DIFFERENTIAL_PRIVACY_EXTENSION_FILES
         differential_privacy_extension.cpp dp_parser.cpp)
+
+add_subdirectory(functions)
 
 
 link_libraries(${EXTERNAL_LIB})
@@ -22,7 +28,7 @@ build_static_extension(differential_privacy ${DIFFERENTIAL_PRIVACY_EXTENSION_FIL
 build_loadable_extension(differential_privacy " " ${DIFFERENTIAL_PRIVACY_EXTENSION_FILES})
 
 add_library(opendp SHARED IMPORTED
-        functions/noise.cpp
+
 )
 set_target_properties(opendp PROPERTIES
         IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/extension/differential_privacy/OpenDP/libopendp.dylib"

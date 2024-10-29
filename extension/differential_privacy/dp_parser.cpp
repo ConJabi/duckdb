@@ -23,6 +23,7 @@ ParserExtensionParseResult DPParserExtension::DPParseFunction(ParserExtensionInf
 		// Capture options
 		std::regex options_pattern(R"(options\s*\(([^]*)\))", std::regex_constants::icase);
 		std::string view_query = std::regex_replace(query_lower, options_pattern, "");
+		printf(view_query.c_str());
 		std::smatch match;
 		string threshold, column;
 
@@ -59,8 +60,8 @@ ParserExtensionParseResult DPParserExtension::DPParseFunction(ParserExtensionInf
 		string meta_query = "INSERT INTO __differential_privacy_metadata VALUES (" + column + "," + threshold + ")"  ;
 
 		// send view and options to planner
-		// return ParserExtensionParseResult(
-		//     make_uniq<DPParseData>(view_query, meta_query));
+		return ParserExtensionParseResult(
+		    make_uniq<DPParseData>(view_query, meta_query));
 
 	}
 
@@ -78,11 +79,11 @@ ParserExtensionPlanResult DPParserExtension::DPPlanFunction(ParserExtensionInfo 
 	printf("test");
 
 	// todo implement rollback on failure
-//	con.BeginTransaction();
-//	con.Query(parse_info.view_query);
-//	con.Query("CREATE TABLE __differential_privacy_metadata (column_name VARCHAR, threshold FLOAT,   PRIMARY KEY (column_name))");
-//	con.Query(parse_info.meta_query);
-//	con.Commit();
+	con.BeginTransaction();
+	con.Query(parse_info.view_query);
+	con.Query("CREATE TABLE __differential_privacy_metadata (column_name VARCHAR, threshold FLOAT,   PRIMARY KEY (column_name))");
+	con.Query(parse_info.meta_query);
+	con.Commit();
 
 	ParserExtensionPlanResult result;
 	result.function = DPFunction();

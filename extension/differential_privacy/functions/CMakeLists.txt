@@ -1,0 +1,6 @@
+set(DIFFERENTIAL_PRIVACY_EXTENSION_FILES
+        ${DIFFERENTIAL_PRIVACY_EXTENSION_FILES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/noise_scalar_function.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/sum_optimizer_function.cpp
+        PARENT_SCOPE
+)
