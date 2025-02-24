@@ -12,30 +12,29 @@ T handleFfiResult(const FfiResult<T> &result) {
 	}
 }
 
+// double make_gaussian(double number, double scale, char *type) {
+// 	char *MO = "ZeroConcentratedDivergence<f64>";
+// 	char *c_T = type;
+// 	bool c_nullable = false;
+//
+// 	AnyDomain *atom_domain = handleFfiResult(opendp_domains__atom_domain(NULL, c_nullable, c_T));
+// 	AnyMetric *metric = handleFfiResult(opendp_metrics__absolute_distance(type));
+// 	AnyMeasurement *measurement = handleFfiResult(
+// 		opendp_measurements__make_gaussian(atom_domain, metric, &scale, NULL, MO));
+//
+//
+// 	const FfiSlice number_slice = {&number, 1};
+//
+// 	AnyObject *number_anyobject = handleFfiResult(opendp_data__slice_as_object(&number_slice, type));
+// 	const AnyObject *private_anyobject = handleFfiResult(opendp_core__measurement_invoke(measurement, number_anyobject));
+//
+// 	const void *private_number_ptr = handleFfiResult(opendp_data__object_as_slice(private_anyobject))->ptr;
+// 	return *(const double *) private_number_ptr;
+// }
 
-double make_gaussian(double number, double scale, char *type) {
-	char *MO = "ZeroConcentratedDivergence<f64>";
-	char *c_T = type;
-	bool c_nullable = false;
-
-	AnyDomain *atom_domain = handleFfiResult(opendp_domains__atom_domain(NULL, c_nullable, c_T));
-	AnyMetric *metric = handleFfiResult(opendp_metrics__absolute_distance(type));
-	AnyMeasurement *measurement = handleFfiResult(
-		opendp_measurements__make_gaussian(atom_domain, metric, &scale, NULL, MO));
-
-
-	const FfiSlice number_slice = {&number, 1};
-
-	AnyObject *number_anyobject = handleFfiResult(opendp_data__slice_as_object(&number_slice, type));
-	const AnyObject *private_anyobject = handleFfiResult(opendp_core__measurement_invoke(measurement, number_anyobject));
-
-	const void *private_number_ptr = handleFfiResult(opendp_data__object_as_slice(private_anyobject))->ptr;
-	return *(const double *) private_number_ptr;
-}
-
-double test (double test){
-	return make_gaussian(test,0.05, "f64");
-}
+// double test (double test){
+// 	return make_gaussian(test,0.05, "f64");
+// }
 
 template<typename T>
 inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
@@ -49,6 +48,7 @@ inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
 		type = "f64";
 		vec_type = "Vec<f64>";
 	}
+	T;
 
 	AnyMeasure *measure = handleFfiResult(opendp_measures__zero_concentrated_divergence(type));
 	char *measure_type = handleFfiResult(opendp_measures__measure_type(measure));
@@ -80,18 +80,22 @@ inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
 namespace duckdb {
 template<typename T>
 static void NoiseFunction(DataChunk  &args, ExpressionState &state, Vector &result) {
-	auto &name_vector = args.data[0];
-	auto result_data = FlatVector::GetData<T>(result);
-	auto input_data = FlatVector::GetData<T>(name_vector);
-	make_gaussian_vec<T>(input_data, 0.05, args.size(), result_data);
+	auto &input_vector = args.data[0];
+	auto &scale_vector = args.data[1];
 
-	// UnaryExecutor::Execute<double, double>(name_vector, result, args.size(),  test);
+	auto result_data = FlatVector::GetData<T>(result);
+	auto input_data = FlatVector::GetData<T>(input_vector);
+	auto scale_data = FlatVector::GetData<T>(scale_vector);
+
+	make_gaussian_vec<T>(input_data, scale_data[0], args.size(), result_data);
+
+	// UnaryExecutor::Execute<double, double>(name_vector, result, args.size(),  test); //todo for evaluation purposes
 }
 
 ScalarFunctionSet CoreFunctions::GetNoiseFunction() {
 	ScalarFunctionSet set("noise");
 	set.AddFunction(ScalarFunction( {LogicalType::FLOAT}, LogicalType::FLOAT, NoiseFunction<float>));
-	set.AddFunction(ScalarFunction( {LogicalType::DOUBLE}, LogicalType::DOUBLE, NoiseFunction<double>));
+	set.AddFunction(ScalarFunction( {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, NoiseFunction<double>));
 	return set;
 }
 

@@ -16,9 +16,10 @@ include_directories(
 
 
 set(DIFFERENTIAL_PRIVACY_EXTENSION_FILES
-        differential_privacy_extension.cpp dp_parser.cpp)
+        differential_privacy_extension.cpp dp_parser.cpp duckdp_state.cpp)
 
 add_subdirectory(functions)
+add_subdirectory(pragma)
 
 
 link_libraries(${EXTERNAL_LIB})
@@ -33,7 +34,6 @@ add_library(opendp SHARED IMPORTED
 set_target_properties(opendp PROPERTIES
         IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/extension/differential_privacy/OpenDP/libopendp.dylib"
 )
-
 
 target_link_libraries(${EXTENSION_NAME} opendp)
 target_link_libraries(${LOADABLE_EXTENSION_NAME} opendp)

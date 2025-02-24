@@ -3,14 +3,27 @@
 #include "differential_privacy_extension.hpp"
 #include "duckdb.hpp"
 #include "functions.hpp"
+#include "pragma.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdp_state.hpp"
+#include "duckdp_extension_callback.hpp"
 
 
 namespace duckdb {
 
     static void LoadInternal(DatabaseInstance &instance) {
+    	auto &config = DBConfig::GetConfig(instance);
+    	config.extension_callbacks.push_back(make_uniq<DuckDPExtensionCallback>());
+
+    	for (auto &connection :
+			ConnectionManager::Get(instance).GetConnectionList()) {
+    		connection->registered_state->Insert(
+				"duckdp", make_shared_ptr<DuckDPState>());
+		}
 
     	// add the scalar and optimizer functions
 		CoreFunctions::Register(instance);
+    	CorePragma::Register(instance);
 
         // add a parser extension
         auto &db_config = duckdb::DBConfig::GetConfig(instance);
