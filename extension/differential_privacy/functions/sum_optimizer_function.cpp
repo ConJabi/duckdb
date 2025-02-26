@@ -79,120 +79,163 @@ public:
 	LogicalOperator &root;
 	shared_ptr<DuckDPState> duckdp_state = GetDuckDPState(context);
 
+
 	void CustomVisitOperatorChildren(unique_ptr<LogicalOperator> &op) {
 		for (auto &child : op->children) {
 			CustomVisitOperator(child);
 		}
 	}
 
-	// todo duplicate names?
-	void CustomVisitOperator(unique_ptr<LogicalOperator> &op) {
-		if (op->type == LogicalOperatorType::LOGICAL_GET) {
-			auto table_catalog = op->Cast<LogicalGet>().GetTable();
-			string table_name = table_catalog.get()->name;
+	void HandleSumFunction(unique_ptr<LogicalOperator> &op, BoundAggregateExpression *expression) {
+		// todo: make suitable for integers
+		// todo: where to get scale
 
-			// quit if table not private
-			if (!duckdp_state->TableIsPrivate(table_name)) {
-				return;
-			}
+		// First create column reference expression to the private column and scale
+		auto column_ref_expression = make_uniq<BoundColumnRefExpression>(expression->return_type, op->GetColumnBindings()[0] );
+		auto standard_deviation = make_uniq<BoundConstantExpression>(Value(0.06));
 
-			auto &column_list = table_catalog->GetColumns();
-			// auto column_ids = op->Cast<LogicalGet>().GetColumnIds();
+		vector<unique_ptr<Expression>> function_expressions_children;
+		function_expressions_children.emplace_back(std::move(column_ref_expression));
+		function_expressions_children.emplace_back(std::move(standard_deviation));
+
+		// Create noise expression with column reference expression as child
+		vector<unique_ptr<Expression>> projection_expressions;
+		auto noise_funct = CoreFunctions().GetNoiseFunction().GetFunctionByArguments(context,vector<LogicalType>{ LogicalType::DOUBLE, LogicalType::DOUBLE});
+		noise_funct.name = "noise";
+		unique_ptr<Expression> function_expression = make_uniq<BoundFunctionExpression>(LogicalType::DOUBLE, noise_funct, std::move(function_expressions_children), nullptr, false);
+		projection_expressions.emplace_back(std::move(function_expression));
+
+		// Create projection with the noise expressions and the aggregation as child
+					idx_t table_idx = optimizer.binder.GenerateTableIndex();
+					auto projection = make_uniq<LogicalProjection>(table_idx, std::move(projection_expressions));
+
+					if (op->has_estimated_cardinality) {
+						projection->SetEstimatedCardinality(op->estimated_cardinality);
+					}
+
+					projection->AddChild(op->Copy(context));
+					projection->ResolveOperatorTypes();
 			//
-			// for (auto column_id : column_ids) {
-			// 	LogicalIndex column_idx = LogicalIndex(column_id);
-			// 	auto column_name = column_list.GetColumn(column_idx).Name();
-			// 	int ab =5;
+			// 		// todo: combine multiple sums over different bindings, search for unsafe bindings
+			// 		// Initialize a ColumnBindingReplacer with the new bindings
+			// 		ColumnBindingReplacer replacer;
+			// 		auto old_binding = op->GetColumnBindings();
+			// 		auto new_binding = projection->GetColumnBindings();
+			// 		replacer.replacement_bindings.emplace_back(old_binding[0], new_binding[0]);
+			// 		op = std::move(projection);
 			//
+			// 		// Make sure we stop at the new projection when replacing bindings
+			// 		replacer.stop_operator = op.get();
+			//
+			// 		// Make the plan consistent again
+			// 		replacer.VisitOperator(root);
+			// 	}
 			// }
 
-			for (auto &column : column_list.Logical()) {
-				column.GetName();
-				int b =4;
-			}
-			// column_list.Get
-			int a =5;
-		}
-
-		// if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-		// 	// todo loop
-		// 	auto &aggr = op->Cast<LogicalAggregate>().expressions[0];
-		//
-		// 	//  todo: make suitable for integers
-		// 	if (aggr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
-		// 		auto expression = static_cast<BoundAggregateExpression*>(aggr.get());
-		// 		if (expression->function.name == "dp_sum") {
-		// 			VisitOperatorExpressions(*op);
-		//
-		// 			// todo: where to get scale
-		// 			// First create column reference expression to the private column and scale
-		// 			auto column_ref_expression = make_uniq<BoundColumnRefExpression>(aggr->return_type, op->GetColumnBindings()[0] );
-		// 			auto standard_deviation = make_uniq<BoundConstantExpression>(Value(0.06));
-		//
-		// 			vector<unique_ptr<Expression>> function_expressions_children;
-		// 			function_expressions_children.emplace_back(std::move(column_ref_expression));
-		// 			function_expressions_children.emplace_back(std::move(standard_deviation));
-		//
-		// 			// Create noise expression with column reference expression as child
-		// 			vector<unique_ptr<Expression>> projection_expressions;
-		// 			auto noise_funct = CoreFunctions().GetNoiseFunction().GetFunctionByArguments(context,vector<LogicalType>{ LogicalType::DOUBLE, LogicalType::DOUBLE});
-		// 			noise_funct.name = "noise";
-		// 			unique_ptr<Expression> function_expression = make_uniq<BoundFunctionExpression>(LogicalType::DOUBLE, noise_funct, std::move(function_expressions_children), nullptr, false);
-		// 			projection_expressions.emplace_back(std::move(function_expression));
-		//
-		// 			// Create projection with the noise expressions and the aggregation as child
-		// 			idx_t table_idx = optimizer.binder.GenerateTableIndex();
-		// 			auto projection = make_uniq<LogicalProjection>(table_idx, std::move(projection_expressions));
-		//
-		// 			if (op->has_estimated_cardinality) {
-		// 				projection->SetEstimatedCardinality(op->estimated_cardinality);
-		// 			}
-		//
-		// 			projection->AddChild(op->Copy(context));
-		// 			projection->ResolveOperatorTypes();
-		//
-		// 			// todo: combine multiple sums over different bindings, search for unsafe bindings
-		// 			// Initialize a ColumnBindingReplacer with the new bindings
-		// 			ColumnBindingReplacer replacer;
-		// 			auto old_binding = op->GetColumnBindings();
-		// 			auto new_binding = projection->GetColumnBindings();
-		// 			replacer.replacement_bindings.emplace_back(old_binding[0], new_binding[0]);
-		// 			op = std::move(projection);
-		//
-		// 			// Make sure we stop at the new projection when replacing bindings
-		// 			replacer.stop_operator = op.get();
-		//
-		// 			// Make the plan consistent again
-		// 			replacer.VisitOperator(root);
-		// 		}
-		// 	}
-		// }
-		CustomVisitOperatorChildren(op);
 	}
 
-	//! Visit an expression and update its column bindings
-	void VisitExpression(unique_ptr<Expression> *expression) {
-		auto &expr = *expression;
-		if (expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
-			auto aggr = static_cast<BoundAggregateExpression*>(expr.get());
+	// check for (table) filters
+	void PrivateOperatorHandler(unique_ptr<LogicalOperator> &op) {
+		duckdp_state->SetPrivateChildExpression(false);
 
-			if (aggr->function.name == "dp_sum") {
-				// todo make sure dp_sum children are correct, check upper > lower, check for constant (this is done in add_bounds)
-				// todo discuss  where to get this value and type from
-				double lower_bound = static_cast<BoundConstantExpression*>(aggr->children[1].get())->value.GetValue<double>();
-				double upper_bound = static_cast<BoundConstantExpression*>(aggr->children[2].get())->value.GetValue<double>();
-
-				add_upper_bound_to_children(context, aggr, upper_bound);
-				add_lower_bound_to_children(context, aggr, lower_bound);
-
-				LogicalType logic_type= aggr->function.arguments[0];
-
-				aggr->function = SumFun().GetFunctions().GetFunctionByArguments(context,vector<LogicalType>{ logic_type}); ;
-				aggr->function.name="sum";
-			}
-		} else {
-			VisitExpressionChildren(**expression);
+		if (op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			throw Exception(ExceptionType::PERMISSION, "Table is private, only aggregations allowed");
 		}
+
+		for (auto &expression :  op->Cast<LogicalAggregate>().expressions) {
+			//  todo: make suitable for integers
+			if (expression->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
+				auto bound_aggregate_expression = static_cast<BoundAggregateExpression*>(expression.get());
+				if (bound_aggregate_expression->function.name == "sum") {
+					// HandleSumFunction(op, bound_aggregate_expression);
+					continue;
+				}
+			}
+			throw Exception(ExceptionType::PERMISSION, "Table is private");
+		}
+	}
+
+	void LogicalGetHandler(unique_ptr<LogicalOperator> &op) {
+		auto &get_operator = op->Cast<LogicalGet>();
+		auto table_catalog = get_operator.GetTable();
+		auto table_name = table_catalog.get()->name;
+
+		// skip checks if table not private
+		if (!duckdp_state->TableIsPrivate(table_name)) {
+			return;
+		}
+
+		idx_t table_index = get_operator.table_index;
+		duckdp_state->RegisterAccessedTable(table_name, table_index);
+
+		auto &column_list = get_operator.GetTable()->GetColumns();
+
+		for (auto &column : column_list.Logical()) {
+			string column_name = column.GetName();
+			idx_t column_index = column.Oid();
+			duckdp_state->RegisterAccessedColumn(table_index, column_name, column_index );
+		}
+	}
+
+
+	void CustomVisitOperator(unique_ptr<LogicalOperator> &op) {
+		CustomVisitOperatorChildren(op);
+		VisitOperatorExpressions(*op);
+
+		// if operator expression has private bindings
+		if (duckdp_state->hasPrivateChildExpression()) {
+			PrivateOperatorHandler(op);
+		}
+
+		// check if private table is accessed, register the bindings
+		if (op->type == LogicalOperatorType::LOGICAL_GET) {
+			LogicalGetHandler(op);
+		}
+
+		// todo check if safe end of query, otherwise maybe use EndQuery callback?
+		// Remove the private bindings from duckdp state
+		if (op && op.get() ==  &root) {
+			duckdp_state->ResetQueryState();
+		}
+	}
+
+
+
+	void VisitExpression(unique_ptr<Expression> *expression) override {
+		VisitExpressionChildren(**expression);
+		auto &expr = *expression;
+
+		// check if column references are bound to private table
+		if (duckdp_state->PrivateTableIsAccessed() && expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			auto &column_ref = expr->Cast<BoundColumnRefExpression>();
+
+			if (duckdp_state->BindingIsPrivate(column_ref.binding)) {
+				duckdp_state->SetPrivateChildExpression(true);
+			}
+		}
+
+
+
+	// 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
+	// 		auto aggr = static_cast<BoundAggregateExpression*>(expr.get());
+	//
+	// 		if (aggr->function.name == "dp_sum") {
+	// 			// todo make sure dp_sum children are correct, check upper > lower, check for constant (this is done in add_bounds)
+	// 			// todo discuss  where to get this value and type from
+	// 			double lower_bound = static_cast<BoundConstantExpression*>(aggr->children[1].get())->value.GetValue<double>();
+	// 			double upper_bound = static_cast<BoundConstantExpression*>(aggr->children[2].get())->value.GetValue<double>();
+	//
+	// 			add_upper_bound_to_children(context, aggr, upper_bound);
+	// 			add_lower_bound_to_children(context, aggr, lower_bound);
+	//
+	// 			LogicalType logic_type= aggr->function.arguments[0];
+	//
+	// 			aggr->function = SumFun().GetFunctions().GetFunctionByArguments(context,vector<LogicalType>{ logic_type}); ;
+	// 			aggr->function.name="sum";
+	// 		}
+	// 	} else {
+	// 		VisitExpressionChildren(**expression);
+	// 	}
 	}
 };
 
@@ -207,7 +250,8 @@ void CoreFunctions::RegisterSumOptimizerFunction(
 	DatabaseInstance &db) {
 
 	// register dummy aggregate function dp_sum
-	ExtensionUtil::RegisterFunction(db, AggregateFunction("dp_sum",{LogicalType::DOUBLE,LogicalType::DOUBLE,LogicalType::DOUBLE},LogicalType::DOUBLE,NULL,NULL,NULL,NULL,NULL,NULL));
+	auto aggregate_function = AggregateFunction("dp_sum",{LogicalType::DOUBLE,LogicalType::DOUBLE,LogicalType::DOUBLE},LogicalType::DOUBLE,NULL,NULL,NULL,NULL,NULL,NULL);
+	ExtensionUtil::RegisterFunction(db,aggregate_function );
 
 	auto &db_config = DBConfig::GetConfig(db);
 
