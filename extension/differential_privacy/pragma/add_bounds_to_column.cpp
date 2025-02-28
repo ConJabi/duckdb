@@ -38,7 +38,8 @@ static void PragmaAddBoundsToColumn(ClientContext &context,
 		throw std::runtime_error("Lower bound is greater than upper bound: " + std::to_string(lower_bound) + ">" + std::to_string(upper_bound));
 	}
 
-	duckdp_state->RegisterPrivateColumn(table_name, column_name, lower_bound, upper_bound);
+	// todo add bounds
+	// duckdp_state->RegisterPrivateColumn(table_name, column_name, lower_bound, upper_bound);
 }
 
 void CorePragma::RegisterAddBoundsToColumn(DatabaseInstance &instance) {

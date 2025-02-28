@@ -1,10 +1,11 @@
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include "pragma.hpp"
 #include "duckdp_state.hpp"
+#include "pragma.hpp"
 
+#include <duckdb/catalog/catalog_entry/duck_table_entry.hpp>
+#include <duckdb/catalog/catalog_entry/table_catalog_entry.hpp>
 #include <duckdb/main/client_data.hpp>
-#include <memory>
 
 namespace duckdb {
 // todo ability to undo? What if multiple schemas with same table name?
@@ -18,7 +19,8 @@ static void PragmaMakeTablePrivate(ClientContext &context,
 		throw std::runtime_error("Table " + table_name + " is already private!");
 	}
 
-	// check if table exists in any of the schemas
+	// todo can make logic more simple
+	// check if table exists in any of the schemas, add table and columns to state
 	auto all_schemas  = Catalog::GetAllSchemas(context);
 	for (auto schema_reference : all_schemas) {
 		auto schema = &schema_reference.get();
@@ -30,6 +32,16 @@ static void PragmaMakeTablePrivate(ClientContext &context,
 			string schema_name = schema_reference.get().name;
 			string catalog_name = schema_reference.get().catalog.GetName();
 			duckdp_state->RegisterPrivateTable( catalog_name, schema_name, table_name);
+
+			auto columns = &table_entry.get()->Cast<TableCatalogEntry>().GetColumns();
+			int a =5;
+			// auto columns2 = columns->Cast<TableCatalogEntry>().GetColumns();//->Cast<TableCatalogEntry>().GetColumns();
+
+			for (auto &column : columns->Logical()) {
+				string column_name = column.GetName();
+				duckdp_state->RegisterPrivateColumn(table_name, column_name);
+			}
+
 			return;
 		}
 	}

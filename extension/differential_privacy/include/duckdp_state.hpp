@@ -5,22 +5,6 @@ namespace duckdb {
 
 
 class DuckDPState : public ClientContextState {
-
-  public:
-    void RegisterPrivateTable(const string &catalog_name, const string &schema_name, const string &table_name);
-    void RegisterPrivateColumn(const string &table_name, const string &column_name, double lower_bound, double upper_bound);
-    bool TableIsPrivate(const string &table_name);
-    bool ColumnIsPrivate(const string &table_name, string &column_name);
-    void RegisterAccessedTable(const string &table_name, idx_t table_id);
-    void RegisterAccessedColumn(idx_t table_id, const string &column_name, idx_t column_id);
-    bool PrivateTableIsAccessed();
-    bool BindingIsPrivate(ColumnBinding binding);
-    void ResetQueryState();
-    void SetPrivateChildExpression(bool is_private);
-    bool hasPrivateChildExpression();
-
-    void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override;
-  public:
   struct PrivateColumn {
     double lower_bound;
     double upper_bound;
@@ -33,11 +17,11 @@ class DuckDPState : public ClientContextState {
   };
 
   struct AccessedColumn {
-    string column_name;
+    PrivateColumn* private_column;
   };
 
   struct AccessedTable {
-    string table_name;
+    PrivateTable* private_table;
     unordered_map<idx_t, AccessedColumn> accessed_columns;
   };
 
@@ -45,9 +29,34 @@ class DuckDPState : public ClientContextState {
     unordered_map<string,PrivateTable> private_tables;
     unordered_map<idx_t,AccessedTable> accessed_tables;
     bool private_child_expression = false;
+    bool private_child_operation = false;
   };
 
-  shared_ptr<State> duckdp_state = make_shared_ptr<State>();
+
+  public:
+    void RegisterPrivateTable(const string &catalog_name, const string &schema_name, const string &table_name);
+    void RegisterPrivateColumn(const string &table_name, const string &column_name);
+    bool TableIsPrivate(const string &table_name);
+    bool ColumnIsPrivate(const string &table_name, string &column_name);
+
+    void RegisterAccessedTable(const string &table_name, idx_t table_id);
+    void RegisterAccessedColumn(idx_t table_id, const string &column_name, idx_t column_id);
+    bool PrivateTableIsAccessed();
+    bool BindingIsPrivate(ColumnBinding binding);
+    void ResetQueryState();
+
+    void SetPrivateChildExpression(bool is_private);
+    bool HasPrivateChildExpression();
+
+    void SetPrivateChildOperator(bool is_private);
+    bool HasPrivateChildOperator();
+
+    void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override;
+
+    PrivateColumn& GetPrivateColumn(ColumnBinding binding);
+
+
+    shared_ptr<State> duckdp_state = make_shared_ptr<State>();
 
 };
 
