@@ -1,3 +1,0 @@
-[submodule "extension/differential_privacy/external/opendp"]
-	path = extension/differential_privacy/external/opendp
-	url = https://github.com/opendp/opendp.git
