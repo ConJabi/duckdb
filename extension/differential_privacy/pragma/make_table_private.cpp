@@ -34,7 +34,6 @@ static void PragmaMakeTablePrivate(ClientContext &context,
 			duckdp_state->RegisterPrivateTable( catalog_name, schema_name, table_name);
 
 			auto columns = &table_entry.get()->Cast<TableCatalogEntry>().GetColumns();
-			int a =5;
 			// auto columns2 = columns->Cast<TableCatalogEntry>().GetColumns();//->Cast<TableCatalogEntry>().GetColumns();
 
 			for (auto &column : columns->Logical()) {

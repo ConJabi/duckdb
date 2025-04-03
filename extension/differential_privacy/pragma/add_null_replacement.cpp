@@ -5,18 +5,19 @@
 
 #include <duckdb/catalog/catalog_entry/table_catalog_entry.hpp>
 #include <duckdb/main/client_data.hpp>
-#include <memory>
+
 
 namespace duckdb {
 
 // todo warn when called for same column multiple times? Allow overwriting?
-static void PragmaAddBoundsToColumn(ClientContext &context,
+// todo add checks to state function, reuse in add_bounds
+static void PragmaAddNullReplacement(ClientContext &context,
 									   const FunctionParameters &parameters) {
 
 	string table_name = parameters.values[0].GetValue<std::string>();
 	string column_name = parameters.values[1].GetValue<std::string>();
-	double lower_bound = parameters.values[2].GetValue<double>();
-	double upper_bound = parameters.values[3].GetValue<double>();
+	double replacement_value = parameters.values[2].GetValue<double>();
+
 	auto duckdp_state = GetDuckDPState(context);
 
 	if ( !duckdp_state->TableIsPrivate(table_name)){
@@ -34,16 +35,12 @@ static void PragmaAddBoundsToColumn(ClientContext &context,
 		throw std::runtime_error("Column " + column_name + " does not exist in table " + table_name);
 	}
 
-	if (upper_bound < lower_bound) {
-		throw std::runtime_error("Lower bound is greater than upper bound: " + std::to_string(lower_bound) + ">" + std::to_string(upper_bound));
-	}
-
-	duckdp_state->AddBoundsToColumn(table_name, column_name, lower_bound, upper_bound);
+	duckdp_state->AddNullReplacement(table_name, column_name, replacement_value);
 }
 
 void CorePragma::RegisterAddBoundsToColumn(DatabaseInstance &instance) {
 	// Define the pragma function
-	auto pragma_func = PragmaFunction::PragmaCall("add_bounds", PragmaAddBoundsToColumn, {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::DOUBLE, LogicalType::DOUBLE});
+	const auto pragma_func = PragmaFunction::PragmaCall("add_replacement", PragmaAddNullReplacement, {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::DOUBLE});
 
 	// Register the pragma function
 	ExtensionUtil::RegisterFunction(instance, pragma_func);

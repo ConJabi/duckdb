@@ -49,7 +49,6 @@ inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
 		vec_type = "Vec<f64>";
 	}
 	T;
-
 	AnyMeasure *measure = handleFfiResult(opendp_measures__zero_concentrated_divergence(type));
 	char *measure_type = handleFfiResult(opendp_measures__measure_type(measure));
 

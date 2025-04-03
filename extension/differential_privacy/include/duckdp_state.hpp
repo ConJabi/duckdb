@@ -5,9 +5,12 @@ namespace duckdb {
 
 
 class DuckDPState : public ClientContextState {
+
+  // todo make state suitable for integer
   struct PrivateColumn {
     double lower_bound;
     double upper_bound;
+    double null_replacement;
   };
 
   struct PrivateTable {
@@ -36,6 +39,10 @@ class DuckDPState : public ClientContextState {
   public:
     void RegisterPrivateTable(const string &catalog_name, const string &schema_name, const string &table_name);
     void RegisterPrivateColumn(const string &table_name, const string &column_name);
+    void AddBoundsToColumn(const string &table_name, const string &column_name, double lower_bound, double upper_bound);
+    void AddNullReplacement(const string &table_name, const string &column_name, double null_replacement);
+
+
     bool TableIsPrivate(const string &table_name);
     bool ColumnIsPrivate(const string &table_name, string &column_name);
 
@@ -53,7 +60,7 @@ class DuckDPState : public ClientContextState {
 
     void TransactionRollback(MetaTransaction &transaction, ClientContext &context) override;
 
-    PrivateColumn& GetPrivateColumn(ColumnBinding binding);
+    PrivateColumn* GetPrivateColumn(ColumnBinding binding);
 
 
     shared_ptr<State> duckdp_state = make_shared_ptr<State>();

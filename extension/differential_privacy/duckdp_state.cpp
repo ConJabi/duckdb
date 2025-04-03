@@ -12,6 +12,16 @@
  	duckdp_state->private_tables[table_name].private_columns[column_name] = {NAN, NAN};
  }
 
+void DuckDPState::AddBoundsToColumn(const string &table_name, const string &column_name, double lower_bound,
+                                     double upper_bound) {
+	 duckdp_state->private_tables[table_name].private_columns[column_name].lower_bound = lower_bound;
+	 duckdp_state->private_tables[table_name].private_columns[column_name].upper_bound = upper_bound;
+ }
+
+ void DuckDPState::AddNullReplacement(const string &table_name, const string &column_name, double null_replacement) {
+ 	duckdp_state->private_tables[table_name].private_columns[column_name].null_replacement = null_replacement;
+ }
+
  // todo duplicate names?
  bool DuckDPState::TableIsPrivate(const string &table_name) {
  	if (duckdp_state->private_tables.find(table_name) != duckdp_state->private_tables.end()) {
@@ -40,8 +50,8 @@
  }
 
  void DuckDPState::RegisterAccessedColumn(idx_t table_id, const string &column_name, idx_t column_id) {
- 	AccessedTable table = duckdp_state->accessed_tables[table_id];
- 	table.accessed_columns[column_id].private_column = &table.private_table->private_columns[column_name];
+ 	auto table = &duckdp_state->accessed_tables[table_id];
+ 	table->accessed_columns[column_id].private_column = &table->private_table->private_columns[column_name];
  }
 
  bool DuckDPState::BindingIsPrivate(ColumnBinding binding) {
@@ -85,14 +95,14 @@ void DuckDPState::SetPrivateChildOperator(bool is_private) {
  	return duckdp_state->private_child_operation;
  }
 
-
+// todo check if this is okay for handling errors, otherwise maybe try/catch
 void DuckDPState::TransactionRollback(MetaTransaction &transaction, ClientContext &context) {
 	 ResetQueryState();
  }
-//
-// DuckDPState::PrivateColumn& DuckDPState::GetPrivateColumn(ColumnBinding binding) {
-// 	 return duckdp_state->accessed_tables[binding.table_index].accessed_columns[binding.column_index].private_column;
-//  }
+
+DuckDPState::PrivateColumn* DuckDPState::GetPrivateColumn(ColumnBinding binding) {
+	 return duckdp_state->accessed_tables[binding.table_index].accessed_columns[binding.column_index].private_column;
+  }
 
  shared_ptr<DuckDPState> GetDuckDPState(ClientContext &context) {
  	auto lookup = context.registered_state->Get<DuckDPState>("duckdp");

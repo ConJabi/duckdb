@@ -1,3 +1,4 @@
+#include "../../../third_party/catch/catch.hpp"
 #include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/core_functions/scalar/generic_functions.hpp"
 #include "duckdb/main/extension_util.hpp"
@@ -5,8 +6,8 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
-#include "functions.hpp"
 #include "duckdp_state.hpp"
+#include "functions.hpp"
 
 #include <duckdb/catalog/catalog_entry/table_catalog_entry.hpp>
 #include <duckdb/main/database.hpp>
@@ -15,11 +16,13 @@
 #include <duckdb/planner/binder.hpp>
 #include <duckdb/planner/expression/bound_constant_expression.hpp>
 #include <duckdb/planner/expression/bound_function_expression.hpp>
+#include <duckdb/planner/expression/bound_operator_expression.hpp>
 #include <duckdb/planner/operator/logical_aggregate.hpp>
 #include <duckdb/planner/operator/logical_get.hpp>
 
 namespace duckdb {
 // todo: organize more into seperate files
+// todo: follow guideline https://github.com/duckdb/duckdb/blob/main/CONTRIBUTING.md
 
 template <typename T>
 vector<unique_ptr<Expression>> add_constant_to_expression(unique_ptr<Expression> expression, T value) {
@@ -69,6 +72,19 @@ void add_lower_bound_to_children(ClientContext &context, BoundAggregateExpressio
 	expression->children = std::move(final_expression_vec);
 }
 
+template <typename T>
+void replace_null_of_children(ClientContext &context, BoundAggregateExpression* expression, T replacement_value) {
+	LogicalType logic_type= expression->function.arguments[0];
+
+	vector<unique_ptr<Expression>> fill_null = add_constant_to_expression(expression->children[0]->Copy(), replacement_value);
+	unique_ptr<BoundOperatorExpression> coalesce_expression = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, logic_type);
+	coalesce_expression->children = std::move(fill_null);
+
+	vector<unique_ptr<Expression>> final_expression_vec;
+	final_expression_vec.emplace_back(std::move(coalesce_expression));
+	expression->children = std::move(final_expression_vec);
+}
+
 
 class DPAggrReplacer : LogicalOperatorVisitor {
 public:
@@ -80,10 +96,13 @@ public:
 	shared_ptr<DuckDPState> duckdp_state = GetDuckDPState(context);
 
 
-	void CustomVisitOperatorChildren(const unique_ptr<LogicalOperator> &op) {
+	// todo change name into something more descriptive
+	bool CustomVisitOperatorChildren(const unique_ptr<LogicalOperator> &op) {
+		bool private_operator = false;
 		for (auto &child : op->children) {
-			CustomVisitOperator(child);
+			private_operator = private_operator || CustomVisitOperator(child);
 		}
+		return private_operator;
 	}
 
 	unique_ptr<LogicalProjection> CreateProjectionOnTop(unique_ptr<LogicalOperator> &op, vector<unique_ptr<Expression>> &projection_expressions) {
@@ -98,7 +117,7 @@ public:
 		return projection;
 	}
 
-	void RedirectBindings(unique_ptr<LogicalProjection> &projection, unique_ptr<LogicalOperator> &op) {
+	void RedirectBindings(unique_ptr<LogicalOperator> &projection, unique_ptr<LogicalOperator> &op) {
 		ColumnBindingReplacer replacer;
 		auto old_binding = op->GetColumnBindings();
 		auto new_binding = projection->GetColumnBindings();
@@ -115,9 +134,9 @@ public:
 		replacer.VisitOperator(root);
 	}
 
-	unique_ptr<BoundFunctionExpression> CreateNoiseExpression(Expression *expression, ColumnBinding expression_binding,
+	unique_ptr<BoundFunctionExpression> CreateNoiseExpression(ColumnBinding child_binding,
 	                                                          double scale) {
-		auto column_ref_expression = make_uniq<BoundColumnRefExpression>(expression->return_type, expression_binding);
+		auto column_ref_expression = make_uniq<BoundColumnRefExpression>(LogicalType::DOUBLE, child_binding);
 		auto standard_deviation = make_uniq<BoundConstantExpression>(Value(scale));
 
 		vector<unique_ptr<Expression>> function_expressions_children;
@@ -134,21 +153,39 @@ public:
 		return function_expression;
 	}
 
-	void RewriteSumExpression(BoundAggregateExpression * bound_aggregate_expression) {
-		// BoundColumnRefExpression* ColRefExpr = bound_aggregate_expression->children[0].get()->Cast<BoundColumnRefExpression*>();
-		// string table_name = duckdp_state.
+	// todo support integer, add checks
+	void RewriteDPSumExpression(BoundAggregateExpression *bound_aggregate_expression) {
+		BoundConstantExpression* lower_bound_expr = &bound_aggregate_expression->children[1]->Cast<BoundConstantExpression>();
+		auto lower_bound = lower_bound_expr->value.GetValue<double>();
+		BoundConstantExpression* upper_bound_expr = &bound_aggregate_expression->children[2]->Cast<BoundConstantExpression>();
+		auto upper_bound = upper_bound_expr->value.GetValue<double>();
+		BoundConstantExpression* fill_null_expr = &bound_aggregate_expression->children[3]->Cast<BoundConstantExpression>();
+		auto fill_null = fill_null_expr->value.GetValue<double>();
 
-					double lower_bound = 2;
-					double upper_bound = 4;
+		replace_null_of_children(context, bound_aggregate_expression, fill_null);
+		add_upper_bound_to_children(context, bound_aggregate_expression, upper_bound);
+		add_lower_bound_to_children(context, bound_aggregate_expression, lower_bound);
 
-					add_upper_bound_to_children(context, bound_aggregate_expression, upper_bound);
-					add_lower_bound_to_children(context, bound_aggregate_expression, lower_bound);
-		//
-		// 			LogicalType logic_type= aggr->function.arguments[0];
-		//
-		// 			aggr->function = SumFun().GetFunctions().GetFunctionByArguments(context,vector<LogicalType>{ logic_type}); ;
-		// 			aggr->function.name="sum";
+		bound_aggregate_expression->function = SumFun().GetFunctions().GetFunctionByArguments(context,vector<LogicalType>{ LogicalType::DOUBLE}); ;
+		bound_aggregate_expression->function.name="sum";
 	}
+
+	void RewriteSumExpression(BoundAggregateExpression * bound_aggregate_expression) {
+		BoundColumnRefExpression* ColRefExpr = &bound_aggregate_expression->children[0].get()->Cast<BoundColumnRefExpression>();
+		auto private_column = duckdp_state->GetPrivateColumn(ColRefExpr->binding);
+
+		if (isnan(private_column->lower_bound) || isnan(private_column->upper_bound)) {
+			throw Exception(ExceptionType::INVALID_INPUT, "Column misses upper bound or lower bound, use pragma add_bounds");
+		}
+
+		double lower_bound = private_column->lower_bound;
+		double upper_bound = private_column->upper_bound;
+
+		add_upper_bound_to_children(context, bound_aggregate_expression, upper_bound);
+		add_lower_bound_to_children(context, bound_aggregate_expression, lower_bound);
+	}
+
+
 	void PrivateOperatorHandler(unique_ptr<LogicalOperator> &op) {
 		if (op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
 			throw Exception(ExceptionType::PERMISSION, "Table is private, only aggregations allowed");
@@ -165,7 +202,12 @@ public:
 				if (bound_aggregate_expression->function.name == "sum") {
 					RewriteSumExpression(bound_aggregate_expression);
 					// todo where to get scale
-					unique_ptr<BoundFunctionExpression> function_expression = CreateNoiseExpression(expression, op->GetColumnBindings()[i], 0.06);
+					unique_ptr<BoundFunctionExpression> function_expression = CreateNoiseExpression(op->GetColumnBindings()[i], 0.06);
+					projection_expressions.emplace_back(std::move(function_expression));
+					continue;
+				} if (bound_aggregate_expression->function.name == "dp_sum") {
+					RewriteDPSumExpression(bound_aggregate_expression);
+					unique_ptr<BoundFunctionExpression> function_expression = CreateNoiseExpression(op->GetColumnBindings()[i], 0.0);
 					projection_expressions.emplace_back(std::move(function_expression));
 					continue;
 				}
@@ -174,28 +216,32 @@ public:
 		}
 
 		// Replace all bindings to op with the new projection bindings
-		unique_ptr<LogicalProjection> projection = CreateProjectionOnTop(op, projection_expressions);
+		// todo what if no expressions, can that happen?
+		unique_ptr<LogicalOperator> projection = CreateProjectionOnTop(op, projection_expressions);
 		RedirectBindings(projection, op);
 	}
 
-	// todo check for (table) filters. Maybe in parser already because: where < max_column_value will not produce filter
-	void LogicalGetHandler(unique_ptr<LogicalOperator> &op) {
+
+	// todo check for (table) filters. Maybe in parser already because: where < max_col_value + 1 will not produce filter
+	// Also where column=value will not produce filter if whole column is value
+	// check for logical_empty result, where > max_column_value
+	bool LogicalGetHandler(unique_ptr<LogicalOperator> &op) {
 		auto &get_operator = op->Cast<LogicalGet>();
 		auto table_catalog = get_operator.GetTable();
 
-		if (!table_catalog) {
-			return;
-		}
+		// todo are there cases with no catalog? what to do then
+		// if (!table_catalog) {
+		// 	return;
+		// }
+
 		auto table_name = table_catalog.get()->name;
 
 		if (!duckdp_state->TableIsPrivate(table_name)) {
-			return;
+			return false;
 		}
-		// table is private
 
 		const idx_t table_index = get_operator.table_index;
 		duckdp_state->RegisterAccessedTable(table_name, table_index);
-		duckdp_state->SetPrivateChildOperator(true);
 
 		auto &column_list = get_operator.GetTable()->GetColumns();
 
@@ -204,30 +250,27 @@ public:
 			const idx_t column_index = column.Oid();
 			duckdp_state->RegisterAccessedColumn(table_index, column_name, column_index );
 		}
+
+		return true;
 	}
 
-// todo disable statistics_propagation void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-
-	void CustomVisitOperator(unique_ptr<LogicalOperator> &op) {
-		// check if operator children and/or expressions accesses private table
-		CustomVisitOperatorChildren(op);
+	// todo change name into something more descriptive
+	bool CustomVisitOperator(unique_ptr<LogicalOperator> &op) {
+		// check if operator children and/or expressions access private tables
+		int a = 5;
+		bool has_private_child_op = CustomVisitOperatorChildren(op);
 		VisitOperatorExpressions(*op);
 
-		if (duckdp_state->HasPrivateChildOperator()) {
-			if (duckdp_state->HasPrivateChildExpression()) {
-
-				PrivateOperatorHandler(op);
-				duckdp_state->SetPrivateChildExpression(false);
-				duckdp_state->SetPrivateChildOperator(false);
-			}else {
-				throw Exception(ExceptionType::PERMISSION, "Table is private");
-			}
+		if (duckdp_state->HasPrivateChildExpression()) {
+			PrivateOperatorHandler(op);
+			duckdp_state->SetPrivateChildExpression(false);
+		}else if (has_private_child_op) {
+			throw Exception(ExceptionType::PERMISSION, "Table is private");
 		}
-		// if operator expression has private bindings
 
 		// check if private table is accessed, register the bindings
 		if (op->type == LogicalOperatorType::LOGICAL_GET) {
-			LogicalGetHandler(op);
+			return LogicalGetHandler(op);
 		}
 
 		// todo check if safe end of query, otherwise maybe use EndQuery callback?
@@ -235,8 +278,9 @@ public:
 		if (op && op.get() ==  &root) {
 			duckdp_state->ResetQueryState();
 		}
-	}
 
+		return false;
+	}
 
 
 	void VisitExpression(unique_ptr<Expression> *expression) override {
@@ -251,29 +295,6 @@ public:
 				duckdp_state->SetPrivateChildExpression(true);
 			}
 		}
-
-
-
-	// 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
-	// 		auto aggr = static_cast<BoundAggregateExpression*>(expr.get());
-	//
-	// 		if (aggr->function.name == "dp_sum") {
-	// 			// todo make sure dp_sum children are correct, check upper > lower, check for constant (this is done in add_bounds)
-	// 			// todo discuss  where to get this value and type from
-	// 			double lower_bound = static_cast<BoundConstantExpression*>(aggr->children[1].get())->value.GetValue<double>();
-	// 			double upper_bound = static_cast<BoundConstantExpression*>(aggr->children[2].get())->value.GetValue<double>();
-	//
-	// 			add_upper_bound_to_children(context, aggr, upper_bound);
-	// 			add_lower_bound_to_children(context, aggr, lower_bound);
-	//
-	// 			LogicalType logic_type= aggr->function.arguments[0];
-	//
-	// 			aggr->function = SumFun().GetFunctions().GetFunctionByArguments(context,vector<LogicalType>{ logic_type}); ;
-	// 			aggr->function.name="sum";
-	// 		}
-	// 	} else {
-	// 		VisitExpressionChildren(**expression);
-	// 	}
 	}
 };
 
@@ -288,7 +309,7 @@ void CoreFunctions::RegisterSumOptimizerFunction(
 	DatabaseInstance &db) {
 
 	// register dummy aggregate function dp_sum
-	auto aggregate_function = AggregateFunction("dp_sum",{LogicalType::DOUBLE,LogicalType::DOUBLE,LogicalType::DOUBLE},LogicalType::DOUBLE,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr);
+	auto aggregate_function = AggregateFunction("dp_sum",{LogicalType::DOUBLE,LogicalType::DOUBLE,LogicalType::DOUBLE,LogicalType::DOUBLE},LogicalType::DOUBLE,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr);
 	ExtensionUtil::RegisterFunction(db,aggregate_function );
 
 	auto &db_config = DBConfig::GetConfig(db);
