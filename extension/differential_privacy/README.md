@@ -13,15 +13,6 @@ create table a (i double);
 insert into a values(5.0);
 ```
 
-### Create Table and Insert Data
-
-First, we create a table named `a` with a single column `i` of type `double`, and then insert a value.
-
-```sql
-create table a (i double);
-insert into a values(5.0);
-```
-
 ### Make table private
 pragma make_table_private(TABLE_NAME);<br> limits the operations allowed on the table
 
