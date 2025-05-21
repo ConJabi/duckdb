@@ -9,7 +9,7 @@
  }
 
  void DuckDPState::RegisterPrivateColumn(const string &table_name, const string &column_name) {
- 	duckdp_state->private_tables[table_name].private_columns[column_name] = {NAN, NAN};
+ 	duckdp_state->private_tables[table_name].private_columns[column_name] = {NAN, NAN, NAN};
  }
 
 void DuckDPState::AddBoundsToColumn(const string &table_name, const string &column_name, double lower_bound,

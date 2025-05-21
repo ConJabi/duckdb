@@ -178,11 +178,18 @@ public:
 			throw Exception(ExceptionType::INVALID_INPUT, "Column misses upper bound or lower bound, use pragma add_bounds");
 		}
 
+		if (isnan(private_column->null_replacement)) {
+			throw Exception(ExceptionType::INVALID_INPUT, "Column misses replacement value for null values, use pragma add_replacement");
+		}
+
+		double null_replacement = private_column->null_replacement;
+		replace_null_of_children(context, bound_aggregate_expression, null_replacement);
+
 		double lower_bound = private_column->lower_bound;
 		double upper_bound = private_column->upper_bound;
-
 		add_upper_bound_to_children(context, bound_aggregate_expression, upper_bound);
 		add_lower_bound_to_children(context, bound_aggregate_expression, lower_bound);
+
 	}
 
 
@@ -229,6 +236,7 @@ public:
 		auto &get_operator = op->Cast<LogicalGet>();
 		auto table_catalog = get_operator.GetTable();
 
+
 		// todo are there cases with no catalog? what to do then
 		// if (!table_catalog) {
 		// 	return;
@@ -244,11 +252,17 @@ public:
 		duckdp_state->RegisterAccessedTable(table_name, table_index);
 
 		auto &column_list = get_operator.GetTable()->GetColumns();
+		auto &column_ids = get_operator.GetColumnIds();
 
-		for (auto &column : column_list.Logical()) {
+
+
+
+		for (int binding_index = 0; binding_index < column_ids.size(); binding_index++) {
+			auto column_id = column_ids[binding_index];
+			auto &column = column_list.GetColumn(LogicalIndex(column_id));
 			string column_name = column.GetName();
-			const idx_t column_index = column.Oid();
-			duckdp_state->RegisterAccessedColumn(table_index, column_name, column_index );
+
+			duckdp_state->RegisterAccessedColumn(table_index, column_name, binding_index );
 		}
 
 		return true;
@@ -257,7 +271,6 @@ public:
 	// todo change name into something more descriptive
 	bool CustomVisitOperator(unique_ptr<LogicalOperator> &op) {
 		// check if operator children and/or expressions access private tables
-		int a = 5;
 		bool has_private_child_op = CustomVisitOperatorChildren(op);
 		VisitOperatorExpressions(*op);
 

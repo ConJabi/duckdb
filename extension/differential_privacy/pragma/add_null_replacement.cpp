@@ -38,7 +38,7 @@ static void PragmaAddNullReplacement(ClientContext &context,
 	duckdp_state->AddNullReplacement(table_name, column_name, replacement_value);
 }
 
-void CorePragma::RegisterAddBoundsToColumn(DatabaseInstance &instance) {
+void CorePragma::RegisterAddNullReplacement(DatabaseInstance &instance) {
 	// Define the pragma function
 	const auto pragma_func = PragmaFunction::PragmaCall("add_replacement", PragmaAddNullReplacement, {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::DOUBLE});
 

@@ -1,8 +1,5 @@
 #!/bin/bash
 
-cd ..
-
-
 # Define OpenDP repository URL and target directory
 OPENDP_REPO="https://github.com/opendp/opendp.git"
 SUBMODULE_DIR="opendp"
@@ -11,7 +8,7 @@ SUBMODULE_DIR="opendp"
 set -e
 
 echo "Adding OpenDP as a submodule..."
-git submodule add --depth=1 $OPENDP_REPO $SUBMODULE_DIR
+git submodule add -f --depth=1 $OPENDP_REPO $SUBMODULE_DIR
 
 echo "Initializing submodule..."
 git submodule update --init --recursive
@@ -29,7 +26,7 @@ git fetch origin
 git checkout -b opendp-updates origin/main
 
 echo "Creating a branch for custom changes..."
-git checkout -b duckdp-changes
+git checkout -b my-custom-changes
 
 # Navigate back to the main project
 cd ..

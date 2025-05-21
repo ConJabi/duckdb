@@ -10,7 +10,7 @@ set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
 project(${TARGET_NAME})
 include_directories(
         include
-        OpenDP
+        opendp/rust
 )
 
 
@@ -32,7 +32,7 @@ add_library(opendp SHARED IMPORTED
 
 )
 set_target_properties(opendp PROPERTIES
-        IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/extension/differential_privacy/OpenDP/libopendp.dylib"
+        IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/extension/differential_privacy/opendp/rust/target/release/libopendp.dylib"
 )
 
 target_link_libraries(${EXTENSION_NAME} opendp)

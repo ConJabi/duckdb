@@ -9,11 +9,13 @@ public:
 	static void Register(DatabaseInstance &instance) {
 		RegisterMakeTablePrivate(instance);
 		RegisterAddBoundsToColumn(instance);
+		RegisterAddNullReplacement(instance);
 	}
 
 private:
 	static void RegisterMakeTablePrivate(DatabaseInstance &instance);
 	static void RegisterAddBoundsToColumn(DatabaseInstance &instance);
+	static void RegisterAddNullReplacement(DatabaseInstance &instance);
 };
 
 } // namespace duckdb

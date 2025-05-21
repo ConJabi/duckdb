@@ -1,4 +1,4 @@
-#include "opendp.h"
+#include "../opendp/rust/opendp.h"
 
 #include "duckdb/main/extension_util.hpp"
 #include "functions.hpp"
@@ -7,9 +7,8 @@ template <typename T>
 T handleFfiResult(const FfiResult<T> &result) {
 	if (result.tag == FfiResult<T>::Tag::Ok) {
 		return result.ok._0;
-	} else {
-		throw std::runtime_error(result.err._0->message);
 	}
+	throw std::runtime_error(result.err._0->message);
 }
 
 // double make_gaussian(double number, double scale, char *type) {
@@ -38,8 +37,8 @@ T handleFfiResult(const FfiResult<T> &result) {
 
 template<typename T>
 inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
-	char * type;
-	char * vec_type;
+	const char * type;
+	const char * vec_type;
 	if (std::is_same<T, float>::value) {
 		type = "f32";
 		vec_type = "Vec<f32>";
@@ -49,10 +48,16 @@ inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
 		vec_type = "Vec<f64>";
 	}
 	T;
-	AnyMeasure *measure = handleFfiResult(opendp_measures__zero_concentrated_divergence(type));
+	AnyMeasure *measure = handleFfiResult(opendp_measures__zero_concentrated_divergence());
 	char *measure_type = handleFfiResult(opendp_measures__measure_type(measure));
 
-	AnyDomain *atom_domain = handleFfiResult(opendp_domains__atom_domain(NULL, false, type));
+	bool contains_null = false;
+
+	const FfiSlice bool_slice = {&contains_null, 1};
+	const AnyObject *bool_anyobject = handleFfiResult(opendp_data__slice_as_object(&bool_slice, "bool"));
+
+
+	AnyDomain *atom_domain = handleFfiResult(opendp_domains__atom_domain(NULL, bool_anyobject, type));
 	const FfiSlice size_slice = {&size, 1};
 	const AnyObject *size_anyobject = handleFfiResult(opendp_data__slice_as_object(&size_slice, "i32"));
 	AnyDomain *vector_domain = handleFfiResult(opendp_domains__vector_domain(atom_domain, size_anyobject));
@@ -60,7 +65,7 @@ inline void make_gaussian_vec(T *number, T scale, uint32_t size, T *result) {
 	AnyMetric *metric = handleFfiResult(opendp_metrics__l2_distance(type));
 
 	AnyMeasurement *measurement = handleFfiResult(
-		opendp_measurements__make_gaussian(vector_domain, metric, &scale, NULL, measure_type));
+		opendp_measurements__make_gaussian(vector_domain, metric, scale, NULL, measure_type));
 
 
 	const FfiSlice number_slice = {number, size};
