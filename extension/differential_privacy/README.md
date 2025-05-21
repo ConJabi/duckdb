@@ -2,7 +2,7 @@ This directory contains preliminary work to include OpenDP into DuckDP
 
 ---
 ### Compiling OpenDP library
-run the compile_opendp.sh script
+run the compile_opendp.sh script from the scripts directory
 
 ### Create Table and Insert Data
 
